@@ -601,16 +601,15 @@ class TestQgsPointLocator : public QObject
       QVERIFY( mMarker.hasVertex() );
       QCOMPARE( mMarker.point(), QgsPointXY( 5, 5 ) );
       QGSCOMPARENEAR( mMarker.distance(), 0.2, 1e-9 );
-      // a Match on an annotation layer has no vector layer
-      QVERIFY( !mMarker.layer() );
+      QCOMPARE( mMarker.layer(), static_cast<QgsMapLayer *>( layer.get() ) );
       // the synthetic feature id maps back to the marker item
-      QCOMPARE( loc.annotationItemId( mMarker.featureId() ), markerId );
+      QCOMPARE( mMarker.itemId(), markerId );
 
       // near the line's start vertex
       const QgsPointLocator::Match mLine = loc.nearestVertex( QgsPointXY( 0.1, 0.0 ), 1.0 );
       QVERIFY( mLine.isValid() );
       QCOMPARE( mLine.point(), QgsPointXY( 0, 0 ) );
-      QCOMPARE( loc.annotationItemId( mLine.featureId() ), lineId );
+      QCOMPARE( mLine.itemId(), lineId );
 
       // all three items are indexed
       QCOMPARE( loc.cachedGeometryCount(), 3 );
@@ -628,7 +627,7 @@ class TestQgsPointLocator : public QObject
       QVERIFY( m.hasEdge() );
       QCOMPARE( m.point(), QgsPointXY( 5, 0 ) );
       QGSCOMPARENEAR( m.distance(), 0.2, 1e-9 );
-      QCOMPARE( loc.annotationItemId( m.featureId() ), lineId );
+      QCOMPARE( m.itemId(), lineId );
 
       QgsPointXY p1, p2;
       m.edgePoints( p1, p2 );
@@ -648,7 +647,7 @@ class TestQgsPointLocator : public QObject
       QVERIFY( mInside.isValid() );
       QVERIFY( mInside.hasArea() );
       QCOMPARE( mInside.point(), QgsPointXY( 25, 25 ) );
-      QCOMPARE( loc.annotationItemId( mInside.featureId() ), polygonId );
+      QCOMPARE( mInside.itemId(), polygonId );
 
       // a point outside every item
       const QgsPointLocator::Match mOutside = loc.nearestArea( QgsPointXY( 100, 100 ), 0 );
@@ -681,9 +680,8 @@ class TestQgsPointLocator : public QObject
       QVERIFY( m.isValid() );
       QVERIFY( m.hasVertex() );
       QCOMPARE( m.point(), QgsPointXY( 5, 5 ) );
-      QCOMPARE( m.mapLayer(), static_cast<QgsMapLayer *>( layer.get() ) );
-      QVERIFY( !m.layer() );
-      QCOMPARE( loc.annotationItemId( m.featureId() ), markerId );
+      QCOMPARE( m.layer(), static_cast<QgsMapLayer *>( layer.get() ) );
+      QCOMPARE( m.itemId(), markerId );
     }
 
     // A MatchFilter that inspects the match identity must see the annotation layer / item id already
@@ -705,7 +703,7 @@ class TestQgsPointLocator : public QObject
           {}
           bool acceptMatch( const QgsPointLocator::Match &match ) override
           {
-            const bool ok = match.mapLayer() == mLayer && !match.itemId().isEmpty();
+            const bool ok = match.layer() == mLayer && !match.itemId().isEmpty();
             if ( ok )
               sawIdentity = true;
             return ok;
@@ -715,9 +713,8 @@ class TestQgsPointLocator : public QObject
       const QgsPointLocator::Match m = loc.nearestVertex( QgsPointXY( 5.2, 5.0 ), 1.0, &filter );
       QVERIFY( m.isValid() );
       QVERIFY( filter.sawIdentity );
-      QCOMPARE( m.mapLayer(), static_cast<QgsMapLayer *>( layer.get() ) );
+      QCOMPARE( m.layer(), static_cast<QgsMapLayer *>( layer.get() ) );
       QCOMPARE( m.itemId(), markerId );
-      QCOMPARE( loc.annotationItemId( m.featureId() ), markerId );
     }
 };
 

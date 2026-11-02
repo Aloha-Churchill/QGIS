@@ -72,26 +72,11 @@ item's :py:func:`~QgsPointLocator.snapGeometry`
 
     ~QgsPointLocator();
 
-    QgsVectorLayer *layer() const;
+    QgsMapLayer *layer() const;
 %Docstring
-Returns the associated vector layer, or ``None`` if this locator was
-built for a non-vector layer such as an annotation layer. Use
-:py:func:`~QgsPointLocator.mapLayer` for the generic accessor.
-%End
+Returns the layer this locator was built for.
 
-    QString annotationItemId( QgsFeatureId id ) const;
-%Docstring
-Returns the annotation item id mapped to the synthetic feature ``id``,
-or an empty string if ``id`` is not an annotation item.
-
-.. versionadded:: 4.4
-%End
-
-    QgsMapLayer *mapLayer() const;
-%Docstring
-Returns the layer this locator was built for (vector or annotation)
-
-.. versionadded:: 4.4
+Prior to QGIS 4.4 this returned a :py:class:`QgsVectorLayer`.
 %End
 
     QgsCoordinateReferenceSystem destinationCrs() const;
@@ -165,7 +150,7 @@ Indicate whether the data have been already indexed
 construct invalid match
 %End
 
-        Match( QgsPointLocator::Type t, QgsVectorLayer *vl, QgsFeatureId fid, double dist, const QgsPointXY &pt, int vertexIndex = 0, QgsPointXY *edgePoints = 0 );
+        Match( QgsPointLocator::Type t, QgsMapLayer *layer, QgsFeatureId fid, double dist, const QgsPointXY &pt, int vertexIndex = 0, QgsPointXY *edgePoints = 0 );
 
         QgsPointLocator::Type type() const;
 
@@ -215,20 +200,12 @@ for vertex / edge match coords depending on what class returns it
 for vertex / edge match (first vertex of the edge)
 %End
 
-        QgsVectorLayer *layer() const;
+        QgsMapLayer *layer() const;
 %Docstring
-The vector layer where the snap occurred, or ``None`` for an
-intersection or a non-vector (e.g. annotation) layer; use
-:py:func:`~QgsPointLocator.mapLayer` in that case.
-%End
+The layer where the snap occurred. Will be ``None`` if the snap happened
+on an intersection.
 
-        QgsMapLayer *mapLayer() const;
-%Docstring
-The map layer where the snap occurred. Unlike
-:py:func:`~QgsPointLocator.layer`, populated for any layer type
-(including annotation); ``None`` for an intersection snap.
-
-.. versionadded:: 4.4
+Prior to QGIS 4.4 this returned a :py:class:`QgsVectorLayer`.
 %End
 
         QgsFeatureId featureId() const;

@@ -56,6 +56,13 @@
 
 using namespace Qt::StringLiterals;
 
+//! Returns TRUE if the snapping \a match is on a vector layer with Z values
+static bool matchLayerHasZ( const QgsPointLocator::Match &match )
+{
+  const QgsVectorLayer *layer = qobject_cast<QgsVectorLayer *>( match.layer() );
+  return layer && QgsWkbTypes::hasZ( layer->wkbType() );
+}
+
 //
 // QgsZValueWidget
 //
@@ -935,7 +942,7 @@ void QgsMapToolEditMeshFrame::cadCanvasMoveEvent( QgsMapMouseEvent *e )
         if ( mZValueWidget )
           mZValueWidget->setZValue( mapVertex( mCurrentVertexIndex ).z() );
       }
-      else if ( matchPoint.isValid() && matchPoint.layer() && QgsWkbTypes::hasZ( matchPoint.layer()->wkbType() ) )
+      else if ( matchPoint.isValid() && matchLayerHasZ( matchPoint ) )
       {
         mForceByLineRubberBand->movePoint( mapPoint );
         if ( mZValueWidget )
@@ -1100,7 +1107,7 @@ void QgsMapToolEditMeshFrame::cadCanvasReleaseEvent( QgsMapMouseEvent *e )
         else
         {
           //only one vertex, change also the Z value if snap on a 3D vector layer
-          if ( e->mapPointMatch().isValid() && QgsWkbTypes::hasZ( e->mapPointMatch().layer()->wkbType() ) )
+          if ( e->mapPointMatch().isValid() && matchLayerHasZ( e->mapPointMatch() ) )
           {
             const QgsMeshVertex mapPointInMapCoordinate = QgsMeshVertex( mapPoint.x(), mapPoint.y(), e->mapPointMatch().interpolatedPoint( mCanvas->mapSettings().destinationCrs() ).z() );
 
@@ -2784,7 +2791,7 @@ void QgsMapToolEditMeshFrame::addVertex( const QgsPointXY &mapPoint, const QgsPo
   }
   else
   {
-    if ( mapPointMatch.isValid() && mapPointMatch.layer() && QgsWkbTypes::hasZ( mapPointMatch.layer()->wkbType() ) )
+    if ( mapPointMatch.isValid() && matchLayerHasZ( mapPointMatch ) )
     {
       const QgsPoint layerPoint = mapPointMatch.interpolatedPoint( mCanvas->mapSettings().destinationCrs() );
       zValue = layerPoint.z();

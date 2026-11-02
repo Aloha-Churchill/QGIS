@@ -1532,7 +1532,7 @@ bool QgsAdvancedDigitizingDockWidget::applyConstraints( QgsMapMouseEvent *e )
   e->setMapPoint( point );
 
   mSnapMatch = context.snappingUtils->snapToMap( point, nullptr, true );
-  if ( mSnapMatch.layer() )
+  if ( qobject_cast<QgsVectorLayer *>( mSnapMatch.layer() ) )
   {
     // note ND: I'm not 100% sure if the point == mSnapMatch.point() comparison was intended be done using QgsPointXY or QgsPoint objects here!
     // I'm using QgsPointXY here to keep the behavior the same from before a duplicate QgsPointXY == operator was removed...

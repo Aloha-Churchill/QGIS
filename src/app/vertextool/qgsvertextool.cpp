@@ -149,6 +149,12 @@ static QgsGeometry geometryToMultiPoint( const QgsGeometry &geom )
 // snapping match filters
 //
 
+//! Returns the vector layer of a snapping \a match, or NULLPTR if the match is not on a vector layer
+static QgsVectorLayer *vectorLayer( const QgsPointLocator::Match &match )
+{
+  return qobject_cast<QgsVectorLayer *>( match.layer() );
+}
+
 
 //! a filter to allow just one particular feature
 class OneFeatureFilter : public QgsPointLocator::MatchFilter
@@ -183,11 +189,11 @@ class MatchCollectingFilter : public QgsPointLocator::MatchFilter
 
     bool acceptMatch( const QgsPointLocator::Match &match ) override
     {
-      if ( match.layer()->geometryType() != Qgis::GeometryType::Polygon )
+      if ( vectorLayer( match )->geometryType() != Qgis::GeometryType::Polygon )
         return true;
 
       QgsVertexId vid;
-      QgsGeometry matchGeom = vertextool->cachedGeometry( match.layer(), match.featureId() );
+      QgsGeometry matchGeom = vertextool->cachedGeometry( vectorLayer( match ), match.featureId() );
       if ( !matchGeom.vertexIdFromVertexNr( match.vertexIndex(), vid ) )
         // should not happen because vertex index in match object was created with vertexNrFromVertexId
         // so the methods are reversible and we will have a vid
@@ -224,7 +230,7 @@ class SelectedMatchFilter : public QgsPointLocator::MatchFilter
         // option 1: we have "locked" feature - we consider just a match from that feature
         // option 2: we do not have "locked" feature - we consider matches from any selected feature
         if ( ( mLockedFeature && mLockedFeature->layer() == match.layer() && mLockedFeature->featureId() == match.featureId() )
-             || ( !mLockedFeature && match.layer()->selectedFeatureIds().contains( match.featureId() ) ) )
+             || ( !mLockedFeature && vectorLayer( match )->selectedFeatureIds().contains( match.featureId() ) ) )
         {
           if ( !mBestSelectedMatch.isValid() || match.distance() < mBestSelectedMatch.distance() )
             mBestSelectedMatch = match;
@@ -538,7 +544,7 @@ void QgsVertexTool::cadCanvasPressEvent( QgsMapMouseEvent *e )
       QgsPointLocator::Match m = snapToEditableLayer( e );
       if ( m.hasVertex() )
       {
-        Vertex vertex( m.layer(), m.featureId(), m.vertexIndex() );
+        Vertex vertex( vectorLayer( m ), m.featureId(), m.vertexIndex() );
 
         HighlightMode mode = ModeReset;
         if ( e->modifiers() & Qt::ShiftModifier )
@@ -722,7 +728,7 @@ void QgsVertexTool::cadCanvasReleaseEvent( QgsMapMouseEvent *e )
     QgsPointLocator::Match match = snapToEditableLayer( e );
     if ( match.isValid() && match.hasVertex() )
     {
-      QgsGeometry geom = cachedGeometry( match.layer(), match.featureId() );
+      QgsGeometry geom = cachedGeometry( vectorLayer( match ), match.featureId() );
       QgsVertexId vid;
       if ( geom.vertexIdFromVertexNr( match.vertexIndex(), vid ) )
       {
@@ -1034,7 +1040,7 @@ QgsPointLocator::Match QgsVertexTool::snapToEditableLayer( QgsMapMouseEvent *e )
   // so the highlight does not jump around at vertices where features are joined
   if ( mLastSnap )
   {
-    OneFeatureFilter filterLast( mLastSnap->layer(), mLastSnap->featureId() );
+    OneFeatureFilter filterLast( vectorLayer( *mLastSnap ), mLastSnap->featureId() );
     QgsPointLocator::Match lastMatch = snapUtils->snapToMap( mapPoint, &filterLast, true );
     // but skip the the previously used feature if it would only snap to segment, while now we have snap to vertex
     // so that if there is a point on a line, it gets priority (as is usual with combined vertex+segment snapping)
@@ -1141,7 +1147,7 @@ QSet<QPair<QgsVectorLayer *, QgsFeatureId>> QgsVertexTool::findAllEditableFeatur
   {
     for ( const QgsPointLocator::Match &m : findEditableLayerMatches( mapPoint, currentVlayer ) )
     {
-      alternatives.insert( qMakePair( m.layer(), m.featureId() ) );
+      alternatives.insert( qMakePair( vectorLayer( m ), m.featureId() ) );
     }
   }
 
@@ -1156,7 +1162,7 @@ QSet<QPair<QgsVectorLayer *, QgsFeatureId>> QgsVertexTool::findAllEditableFeatur
 
       for ( const QgsPointLocator::Match &m : findEditableLayerMatches( mapPoint, vlayer ) )
       {
-        alternatives.insert( qMakePair( m.layer(), m.featureId() ) );
+        alternatives.insert( qMakePair( vectorLayer( m ), m.featureId() ) );
       }
     }
   }
@@ -1189,7 +1195,7 @@ void QgsVertexTool::tryToSelectFeature( QgsMapMouseEvent *e )
         // ideally the feature that would get normally highlighted should be also the first choice
         // because as user moves mouse, different features are highlighted, so the highlighted feature
         // should be first to get selected
-        QPair<QgsVectorLayer *, QgsFeatureId> firstChoice( m.layer(), m.featureId() );
+        QPair<QgsVectorLayer *, QgsFeatureId> firstChoice( vectorLayer( m ), m.featureId() );
         mLockedFeatureAlternatives->alternatives.append( firstChoice );
         alternatives.remove( firstChoice );
       }
@@ -1261,7 +1267,7 @@ bool QgsVertexTool::isNearEndpointMarker( const QgsPointXY &mapPoint )
 
 bool QgsVertexTool::isMatchAtEndpoint( const QgsPointLocator::Match &match )
 {
-  QgsGeometry geom = cachedGeometry( match.layer(), match.featureId() );
+  QgsGeometry geom = cachedGeometry( vectorLayer( match ), match.featureId() );
 
   if ( geom.type() != Qgis::GeometryType::Line )
     return false;
@@ -1271,7 +1277,7 @@ bool QgsVertexTool::isMatchAtEndpoint( const QgsPointLocator::Match &match )
 
 QgsPointXY QgsVertexTool::positionForEndpointMarker( const QgsPointLocator::Match &match )
 {
-  QgsGeometry geom = cachedGeometry( match.layer(), match.featureId() );
+  QgsGeometry geom = cachedGeometry( vectorLayer( match ), match.featureId() );
 
   QgsPointXY pt0 = geom.vertexAt( adjacentVertexIndexToEndpoint( geom, match.vertexIndex() ) );
   QgsPointXY pt1 = geom.vertexAt( match.vertexIndex() );
@@ -1317,11 +1323,11 @@ void QgsVertexTool::mouseMoveNotDragging( QgsMapMouseEvent *e )
     // if we are at an endpoint, let's show also the endpoint indicator
     // so user can possibly add a new vertex at the end
     // but not for NURBS curves (endpoint addition not yet supported)
-    const QgsGeometry geom = cachedGeometry( m.layer(), m.featureId() );
+    const QgsGeometry geom = cachedGeometry( vectorLayer( m ), m.featureId() );
     const bool isNurbs = QgsNurbsUtils::containsNurbsCurve( geom.constGet() );
     if ( isMatchAtEndpoint( m ) && !isNurbs )
     {
-      mMouseAtEndpoint = std::make_unique< Vertex >( m.layer(), m.featureId(), m.vertexIndex() );
+      mMouseAtEndpoint = std::make_unique< Vertex >( vectorLayer( m ), m.featureId(), m.vertexIndex() );
       mEndpointMarkerCenter = std::make_unique< QgsPointXY >( positionForEndpointMarker( m ) );
       mEndpointMarker->setCenter( *mEndpointMarkerCenter );
       mEndpointMarker->setColor( Qt::gray );
@@ -1352,7 +1358,7 @@ void QgsVertexTool::mouseMoveNotDragging( QgsMapMouseEvent *e )
     QgsPointXY p0, p1;
     m.edgePoints( p0, p1 );
 
-    QgsGeometry geom = cachedGeometry( m.layer(), m.featureId() );
+    QgsGeometry geom = cachedGeometry( vectorLayer( m ), m.featureId() );
     if ( isCircularVertex( geom, m.vertexIndex() ) )
     {
       // circular edge at the first vertex
@@ -1418,7 +1424,7 @@ void QgsVertexTool::updateVertexBand( const QgsPointLocator::Match &m )
     bool isCircular = false;
     if ( m.layer() )
     {
-      isCircular = isCircularVertex( cachedGeometry( m.layer(), m.featureId() ), m.vertexIndex() );
+      isCircular = isCircularVertex( cachedGeometry( vectorLayer( m ), m.featureId() ), m.vertexIndex() );
     }
 
     mVertexBand->setIcon( isCircular ? Qgis::RubberBandIconType::DiamondFilled : Qgis::RubberBandIconType::Circle );
@@ -1439,7 +1445,7 @@ void QgsVertexTool::updateFeatureBand( const QgsPointLocator::Match &m )
 
     mBezierMarker->clear();
 
-    QgsGeometry geom = cachedGeometry( m.layer(), m.featureId() );
+    QgsGeometry geom = cachedGeometry( vectorLayer( m ), m.featureId() );
 
     if ( QgsNurbsUtils::containsNurbsCurve( geom.constGet() ) )
     {
@@ -1448,7 +1454,7 @@ void QgsVertexTool::updateFeatureBand( const QgsPointLocator::Match &m )
 
       if ( nurbs && !nurbs->controlPoints().isEmpty() )
       {
-        QVector<QgsPointXY> mapPoints = transformNurbsControlPointsToMap( m.layer(), nurbs->controlPoints() );
+        QVector<QgsPointXY> mapPoints = transformNurbsControlPointsToMap( vectorLayer( m ), nurbs->controlPoints() );
 
         if ( nurbs->isPolyBezier() )
         {
@@ -1471,7 +1477,7 @@ void QgsVertexTool::updateFeatureBand( const QgsPointLocator::Match &m )
             mNurbsControlPolygonBand->addPoint( pt );
           mNurbsControlPolygonBand->setVisible( true );
 
-          mFeatureBandMarkers->setToGeometry( geometryToMultiPoint( geom ), m.layer() );
+          mFeatureBandMarkers->setToGeometry( geometryToMultiPoint( geom ), vectorLayer( m ) );
           mFeatureBandMarkers->setVisible( true );
         }
       }
@@ -1481,15 +1487,15 @@ void QgsVertexTool::updateFeatureBand( const QgsPointLocator::Match &m )
       // Not a NURBS curve
       mBezierMarker->setVisible( false );
       mNurbsControlPolygonBand->setVisible( false );
-      mFeatureBandMarkers->setToGeometry( geometryToMultiPoint( geom ), m.layer() );
+      mFeatureBandMarkers->setToGeometry( geometryToMultiPoint( geom ), vectorLayer( m ) );
       mFeatureBandMarkers->setVisible( true );
     }
 
     if ( QgsWkbTypes::isCurvedType( geom.wkbType() ) )
       geom = QgsGeometry( geom.constGet()->segmentize() );
-    mFeatureBand->setToGeometry( geom, m.layer() );
+    mFeatureBand->setToGeometry( geom, vectorLayer( m ) );
     mFeatureBand->setVisible( true );
-    mFeatureBandLayer = m.layer();
+    mFeatureBandLayer = vectorLayer( m );
     mFeatureBandFid = m.featureId();
   }
   else
@@ -1909,7 +1915,7 @@ QSet<Vertex> QgsVertexTool::findCoincidentVertices( const QSet<Vertex> &vertices
       const auto snappedVertices = layerVerticesSnappedToPoint( vlayer, mapPointV );
       for ( const QgsPointLocator::Match &otherMatch : snappedVertices )
       {
-        Vertex otherVertex( otherMatch.layer(), otherMatch.featureId(), otherMatch.vertexIndex() );
+        Vertex otherVertex( vectorLayer( otherMatch ), otherMatch.featureId(), otherMatch.vertexIndex() );
         if ( !vertices.contains( otherVertex ) )
           topoVertices << otherVertex;
       }
@@ -1945,10 +1951,10 @@ void QgsVertexTool::startDraggingMoveVertex( const QgsPointLocator::Match &m )
 {
   Q_ASSERT( m.hasVertex() );
 
-  QgsGeometry geom = cachedGeometry( m.layer(), m.featureId() );
+  QgsGeometry geom = cachedGeometry( vectorLayer( m ), m.featureId() );
 
   // start dragging of snapped point of current layer
-  mDraggingVertex = std::make_unique< Vertex >( m.layer(), m.featureId(), m.vertexIndex() );
+  mDraggingVertex = std::make_unique< Vertex >( vectorLayer( m ), m.featureId(), m.vertexIndex() );
   mDraggingVertexType = MovingVertex;
   mDraggingExtraVertices.clear();
   mDraggingExtraVerticesOffset.clear();
@@ -1965,7 +1971,7 @@ void QgsVertexTool::startDraggingMoveVertex( const QgsPointLocator::Match &m )
     movingVertices.unite( findCoincidentVertices( movingVertices ) );
   }
 
-  buildExtraVertices( movingVertices, geom.vertexAt( m.vertexIndex() ), m.layer() );
+  buildExtraVertices( movingVertices, geom.vertexAt( m.vertexIndex() ), vectorLayer( m ) );
 
   cadDockWidget()->setPoints( QList<QgsPointXY>() << m.point() << m.point() );
 
@@ -2122,13 +2128,13 @@ void QgsVertexTool::startDraggingAddVertex( const QgsPointLocator::Match &m )
   // activate advanced digitizing dock
   setAdvancedDigitizingAllowed( true );
 
-  mDraggingVertex = std::make_unique< Vertex >( m.layer(), m.featureId(), m.vertexIndex() + 1 );
+  mDraggingVertex = std::make_unique< Vertex >( vectorLayer( m ), m.featureId(), m.vertexIndex() + 1 );
   mDraggingVertexType = AddingVertex;
   mDraggingExtraVertices.clear();
   mDraggingExtraVerticesOffset.clear();
   mDraggingExtraSegments.clear();
 
-  QgsGeometry geom = cachedGeometry( m.layer(), m.featureId() );
+  QgsGeometry geom = cachedGeometry( vectorLayer( m ), m.featureId() );
 
   // TODO: handles rings correctly?
   QgsPointXY v0 = geom.vertexAt( m.vertexIndex() );
@@ -2161,7 +2167,7 @@ void QgsVertexTool::startDraggingAddVertex( const QgsPointLocator::Match &m )
           continue;
 
         // start dragging of snapped point of current layer
-        mDraggingExtraSegments << Vertex( otherMatch.layer(), otherMatch.featureId(), otherMatch.vertexIndex() );
+        mDraggingExtraSegments << Vertex( vectorLayer( otherMatch ), otherMatch.featureId(), otherMatch.vertexIndex() );
       }
     }
   }
@@ -2205,20 +2211,20 @@ void QgsVertexTool::startDraggingEdge( const QgsPointLocator::Match &m, const Qg
   mDraggingExtraVertices.clear();
   mDraggingExtraVerticesOffset.clear();
 
-  QgsGeometry geom = cachedGeometry( m.layer(), m.featureId() );
+  QgsGeometry geom = cachedGeometry( vectorLayer( m ), m.featureId() );
 
   QSet<Vertex> movingVertices;
-  movingVertices << Vertex( m.layer(), m.featureId(), m.vertexIndex() );
-  movingVertices << Vertex( m.layer(), m.featureId(), m.vertexIndex() + 1 );
+  movingVertices << Vertex( vectorLayer( m ), m.featureId(), m.vertexIndex() );
+  movingVertices << Vertex( vectorLayer( m ), m.featureId(), m.vertexIndex() + 1 );
 
   // add an extra vertex if it is circular edge - so that we move the whole edge and not just one part of it
   if ( isCircularVertex( geom, m.vertexIndex() ) )
   {
-    movingVertices << Vertex( m.layer(), m.featureId(), m.vertexIndex() - 1 );
+    movingVertices << Vertex( vectorLayer( m ), m.featureId(), m.vertexIndex() - 1 );
   }
   else if ( isCircularVertex( geom, m.vertexIndex() + 1 ) )
   {
-    movingVertices << Vertex( m.layer(), m.featureId(), m.vertexIndex() + 2 );
+    movingVertices << Vertex( vectorLayer( m ), m.featureId(), m.vertexIndex() + 2 );
   }
 
   buildDragBandsForVertices( movingVertices, mapPoint );
@@ -2229,7 +2235,7 @@ void QgsVertexTool::startDraggingEdge( const QgsPointLocator::Match &m, const Qg
   }
 
   QgsPointXY layerPoint = toLayerCoordinates( m.layer(), mapPoint );
-  buildExtraVertices( movingVertices, layerPoint, m.layer() );
+  buildExtraVertices( movingVertices, layerPoint, vectorLayer( m ) );
 
   cadDockWidget()->setPoints( QList<QgsPointXY>() << m.point() << m.point() );
 }
@@ -2264,7 +2270,7 @@ QgsPoint QgsVertexTool::matchToLayerPoint( const QgsVectorLayer *destLayer, cons
       {
         //  use point coordinates of the layer
         QgsFeature f;
-        QgsFeatureIterator fi = match->layer()->getFeatures( QgsFeatureRequest( match->featureId() ).setNoAttributes() );
+        QgsFeatureIterator fi = vectorLayer( *match )->getFeatures( QgsFeatureRequest( match->featureId() ).setNoAttributes() );
         if ( fi.nextFeature( f ) )
         {
           QgsPoint layerPoint = f.geometry().vertexAt( match->vertexIndex() );
@@ -2758,7 +2764,7 @@ void QgsVertexTool::deleteVertex()
       const auto snappedVertices = layerVerticesSnappedToPoint( vertexToDelete.layer, mapPt );
       for ( const QgsPointLocator::Match &otherMatch : snappedVertices )
       {
-        Vertex otherVertex( otherMatch.layer(), otherMatch.featureId(), otherMatch.vertexIndex() );
+        Vertex otherVertex( vectorLayer( otherMatch ), otherMatch.featureId(), otherMatch.vertexIndex() );
         if ( toDelete.contains( otherVertex ) || topoVerticesToDelete.contains( otherVertex ) )
           continue;
 
@@ -3062,7 +3068,7 @@ bool QgsVertexTool::matchEdgeCenterTest( const QgsPointLocator::Match &m, const 
   QgsPointXY p0, p1;
   m.edgePoints( p0, p1 );
 
-  QgsGeometry geom = cachedGeometry( m.layer(), m.featureId() );
+  QgsGeometry geom = cachedGeometry( vectorLayer( m ), m.featureId() );
   if ( isCircularVertex( geom, m.vertexIndex() ) || isCircularVertex( geom, m.vertexIndex() + 1 ) )
     return false; // currently not supported for circular edges
 
@@ -3359,7 +3365,7 @@ void QgsVertexTool::rangeMethodReleaseEvent( QgsMapMouseEvent *e )
       {
         if ( m.layer() == mRangeSelectionFirstVertex->layer && m.featureId() == mRangeSelectionFirstVertex->fid )
         {
-          QList<Vertex> lst = verticesInRange( m.layer(), m.featureId(), mRangeSelectionFirstVertex->vertexId, m.vertexIndex(), e->modifiers() & Qt::ControlModifier );
+          QList<Vertex> lst = verticesInRange( vectorLayer( m ), m.featureId(), mRangeSelectionFirstVertex->vertexId, m.vertexIndex(), e->modifiers() & Qt::ControlModifier );
           setHighlightedVertices( lst );
 
           mSelectionMethod = SelectionNormal;
@@ -3372,7 +3378,7 @@ void QgsVertexTool::rangeMethodReleaseEvent( QgsMapMouseEvent *e )
       QgsPointLocator::Match m = snapToEditableLayer( e );
       if ( m.hasVertex() )
       {
-        mRangeSelectionFirstVertex = std::make_unique< Vertex >( m.layer(), m.featureId(), m.vertexIndex() );
+        mRangeSelectionFirstVertex = std::make_unique< Vertex >( vectorLayer( m ), m.featureId(), m.vertexIndex() );
         setHighlightedVertices( QList<Vertex>() << *mRangeSelectionFirstVertex );
       }
     }
@@ -3403,7 +3409,7 @@ void QgsVertexTool::rangeMethodMoveEvent( QgsMapMouseEvent *e )
     // pick temporary final vertex and highlight vertices
     if ( m.layer() == mRangeSelectionFirstVertex->layer && m.featureId() == mRangeSelectionFirstVertex->fid )
     {
-      QList<Vertex> lst = verticesInRange( m.layer(), m.featureId(), mRangeSelectionFirstVertex->vertexId, m.vertexIndex(), e->modifiers() & Qt::ControlModifier );
+      QList<Vertex> lst = verticesInRange( vectorLayer( m ), m.featureId(), mRangeSelectionFirstVertex->vertexId, m.vertexIndex(), e->modifiers() & Qt::ControlModifier );
       setHighlightedVertices( lst );
     }
   }
